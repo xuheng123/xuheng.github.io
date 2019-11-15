@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>AR展示系统</title>
+        <script src="build/three.js"></script>
+        <script src="js/libs/inflate.min.js"></script>
+        <script src="js/loaders/FBXLoader.js"></script>
+        <style type="text/css">
+            div#canvas-frame {
+                border: none;
+                cursor: pointer;
+                width: 100%;
+                height: 2000px;
+                background-color: #EEEEEE;
+            }
+            .booth {
+                position: absolute;
+            }
+        </style>
+        <script >
+            // import * as THREE from '../build/three.module.js';
+            // import { FBXLoader } from './jsm/loaders/FBXLoader.js';
+            var mixer;
+            var clock = new THREE.Clock();
+            var renderer;
+            var progressBarDiv;
+            function initThree() {
+                width = document.getElementById('canvas-frame').clientWidth;
+                height = document.getElementById('canvas-frame').clientHeight;
+
+                renderer = new THREE.WebGLRenderer({antialias : true});
+                renderer.setSize(width, height);
+                document.getElementById('canvas-frame').appendChild(renderer.domElement);
+                renderer.setClearColor(0xFFFFFF, 1.0);
+
+                progressBarDiv = document.createElement( 'div' );
+                progressBarDiv.innerText = "Loading...";
+                progressBarDiv.style.fontSize = "3em";
+                progressBarDiv.style.color = "#888";
+                progressBarDiv.style.display = "block";
+                progressBarDiv.style.position = "absolute";
+                progressBarDiv.style.top = "50%";
+                progressBarDiv.style.width = "100%";
+                progressBarDiv.style.textAlign = "center";
+            }
+
+            var camera;
+            function initCamera() {
+                camera = new THREE.PerspectiveCamera(45, width / height, 1, 10000);
+                camera.position.set(0,0,140);
+            }
+
+            var scene;
+            function initScene() {
+                scene = new THREE.Scene();
+            }
+
+            var light;
+            function initLight() {
+               light = new THREE.HemisphereLight( 0xffffff, 0x444444 );
+                light.position.set( 0, 200, 0 );
+                scene.add( light );
+
+                light = new THREE.DirectionalLight( 0xffffff );
+                light.position.set( 0, 200, 100 );
+                light.castShadow = true;
+                light.shadow.camera.top = 180;
+                light.shadow.camera.bottom = - 100;
+                light.shadow.camera.left = - 120;
+                light.shadow.camera.right = 120;
+                scene.add( light );
+            }
+
+
+            var mesh;
+            var geometry;
+            var material;
+
+            function initObject() {
+                scene = new THREE.Scene();
+                geometry = new THREE.PlaneGeometry( 180, 200);
+                updateProgressBar( 0 );
+                showProgressBar();
+                  // model
+                var loader = new THREE.FBXLoader();
+                loader.load( 'models/fbx/hexiehao1115/hexiehao1115.fbx', function ( object ) {
+
+                    mixer = new THREE.AnimationMixer( object );
+
+                    var action = mixer.clipAction( object.animations[ 0 ] );
+                    action.play();
+
+                    object.traverse( function ( child ) {
+
+                        if ( child.isMesh ) {
+
+                            child.castShadow = true;
+                            child.receiveShadow = true;
+
+                        }
+
+                    } );
+                    object.scale.set(0.5,0.5,0.5);
+                    object.position.set(0,-40,0);
+                    scene.add( object );
+                    hideProgressBar();
+                }, onProgress, onError );
+
+                var video = document.getElementById('video');
+                var vendorUrl = window.URL || window.webkitURL;
+                var texture;
+
+
+                navigator.getMedia = navigator.getUserMedia ||
+                                     navigator.webkitGetUserMedia ||
+                                     navigator.mozGetUserMedia ||
+                                     navigator.msGetUserMedia ||
+                                     (navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+            if(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia){
+                navigator.mediaDevices.getUserMedia({
+
+                    'audio':true,
+
+                    'video':{ 'facingMode': "environment" }//调用前置摄像头，后置摄像头使用video: { facingMode: { exact: "environment" } }user
+
+                })
+
+                .then(function(strem) {try {
+                      video.srcObject = strem;
+                    } catch (error) {
+                      video.src = URL.createObjectURL(strem);
+                    }
+                    video.play(); })
+
+                .catch(function(error) { console.log(666);console.log(error) })
+
+            }else if(navigator.getUserMedia){
+
+                nnavigator.getMedia({
+                    video: true,  // 摄像头
+                    audio: false  // 音频
+                }, function(strem){
+                    //console.log(">>>>>>>>>>>"+strem); // 获取到视频流
+                    try {
+                      video.srcObject = strem;
+                    } catch (error) {
+                      video.src = URL.createObjectURL(strem);
+                    }
+                    video.play(); // 向PeerConnection中加入需要发送的流
+
+                }, function(error) {
+                    console.log(error);
+                });
+
+            }else{
+
+                alert('不支持摄像头调用！')
+
+            }
+
+                // navigator.getMedia({
+                //     video: true,  // 摄像头
+                //     audio: false  // 音频
+                // }, function(strem){
+                //     //console.log(">>>>>>>>>>>"+strem); // 获取到视频流
+                //     try {
+                //       video.srcObject = strem;
+                //     } catch (error) {
+                //       video.src = URL.createObjectURL(strem);
+                //     }
+                //     video.play(); // 向PeerConnection中加入需要发送的流
+
+                // }, function(error) {
+                //     console.log(error);
+                // });
+                texture = new THREE.VideoTexture( video );//可以直接把视频设为材质
+                texture.minFilter = THREE.LinearFilter;
+                texture.magFilter = THREE.LinearFilter;
+                texture.format = THREE.RGBFormat;
+
+                material = new THREE.MeshPhongMaterial( { map: texture , side: THREE.DoubleSide} );
+                mesh = new THREE.Mesh(geometry,  material);
+                mesh.position.set(0,0,-100);
+                scene.add(mesh);
+            }
+
+            function onProgress( xhr ) {
+
+                if ( xhr.lengthComputable ) {
+
+                    updateProgressBar( xhr.loaded / xhr.total );
+
+                    console.log( Math.round( xhr.loaded / xhr.total * 100, 2 ) + '% downloaded' );
+
+                }
+
+            }
+
+            function onError() {
+
+                var message = "Error loading model";
+                progressBarDiv.innerText = message;
+                console.log( message );
+
+            }
+            function updateProgressBar( fraction ) {
+
+                progressBarDiv.innerText = 'Loading... ' + Math.round( fraction * 100, 2 ) + '%';
+
+            }
+            function showProgressBar() {
+
+                document.body.appendChild( progressBarDiv );
+
+            }
+            function hideProgressBar() {
+
+                document.body.removeChild( progressBarDiv );
+
+            }
+
+            function threeStart() {
+                initThree();
+                initObject();
+                initCamera();
+                initLight();
+                animation();
+            }
+
+            function animation() {
+                requestAnimationFrame(animation);
+                var delta = clock.getDelta();
+
+                if ( mixer ) mixer.update( delta );
+
+                 renderer.render( scene, camera );
+            }
+
+
+        </script>
+    </head>
+
+    <body onload="threeStart();">
+        <div id="canvas-frame">
+            <div class="booth">
+                <video id="video" width="0" height="800"></video>
+                <!-- <canvas id='canvas' width='400' height='300'></canvas> -->
+            </div>
+        </div>
+
+    </body>
+</html>
+
